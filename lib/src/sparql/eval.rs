@@ -1111,6 +1111,7 @@ impl SimpleEvaluator {
                             Duration::from(v1.checked_sub(v2)?).into()
                         }
                         NumericBinaryOperands::Duration(v1, v2) => v1.checked_sub(v2)?.into(),
+                        NumericBinaryOperands::DurationInteger(_, _) => return None,
                         NumericBinaryOperands::YearMonthDuration(v1, v2) => {
                             v1.checked_sub(v2)?.into()
                         }
@@ -2897,6 +2898,7 @@ enum NumericBinaryOperands {
     Integer(Integer, Integer),
     Decimal(Decimal, Decimal),
     Duration(Duration, Duration),
+    DurationInteger(Duration, Integer),
     YearMonthDuration(YearMonthDuration, YearMonthDuration),
     DayTimeDuration(DayTimeDuration, DayTimeDuration),
     DateTime(DateTime, DateTime),
@@ -2952,6 +2954,30 @@ impl NumericBinaryOperands {
             (EncodedTerm::IntegerLiteral(v1), EncodedTerm::DecimalLiteral(v2)) => {
                 Some(Self::Decimal(v1.into(), v2))
             }
+            // NOTE: this is only intended for the inital bootstrapping of the AvgAccumulator for Duration
+            (EncodedTerm::IntegerLiteral(v1), EncodedTerm::DurationLiteral(v2)) => {
+                if v1.is_identical_with(&Integer::from(0)) {
+                    Some(Self::Duration(Duration::new(0, 0), v2))
+                } else {
+                    None
+                }
+            }
+            // NOTE: this is only intended for the inital bootstrapping of the AvgAccumulator for Duration
+            (EncodedTerm::IntegerLiteral(v1), EncodedTerm::YearMonthDurationLiteral(v2)) => {
+                if v1.is_identical_with(&Integer::from(0)) {
+                    Some(Self::Duration(Duration::new(0, 0), v2.into()))
+                } else {
+                    None
+                }
+            }
+            // NOTE: this is only intended for the inital bootstrapping of the AvgAccumulator for Duration
+            (EncodedTerm::IntegerLiteral(v1), EncodedTerm::DayTimeDurationLiteral(v2)) => {
+                if v1.is_identical_with(&Integer::from(0)) {
+                    Some(Self::Duration(Duration::new(0, 0), v2.into()))
+                } else {
+                    None
+                }
+            }
             (EncodedTerm::DecimalLiteral(v1), EncodedTerm::FloatLiteral(v2)) => {
                 Some(Self::Float(v1.into(), v2))
             }
@@ -2972,6 +2998,10 @@ impl NumericBinaryOperands {
             }
             (EncodedTerm::DurationLiteral(v1), EncodedTerm::DayTimeDurationLiteral(v2)) => {
                 Some(Self::Duration(v1, v2.into()))
+            }
+            // TODO: also add other producing variations
+            (EncodedTerm::DurationLiteral(v1), EncodedTerm::IntegerLiteral(v2)) => {
+                Some(Self::DurationInteger(v1, v2))
             }
             (EncodedTerm::YearMonthDurationLiteral(v1), EncodedTerm::DurationLiteral(v2)) => {
                 Some(Self::Duration(v1.into(), v2))
@@ -4551,6 +4581,10 @@ impl Accumulator for AvgAccumulator {
                     Decimal::from(v1).checked_div(v2).map(Into::into)
                 }
                 NumericBinaryOperands::Decimal(v1, v2) => v1.checked_div(v2).map(Into::into),
+                NumericBinaryOperands::DurationInteger(v1, v2) => {
+                    let unsigned_rhs: u32 = i64::from(v2).try_into().expect("Unable to convert integer to unsigned integer integer in accumulator. Should be unreachable as counter can't turn negative");
+                    v1.checked_div(unsigned_rhs).map(Into::into)
+                },
                 _ => None,
             }
         }

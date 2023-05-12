@@ -107,6 +107,15 @@ impl Duration {
         })
     }
 
+    #[inline]
+    pub fn checked_div(&self, rhs: impl Into<Decimal>) -> Option<DayTimeDuration> {
+        if !self.year_month.is_identical_with(&YearMonthDuration::new(0)) {
+            panic!("Unable to divide duration that has yearMonth part, as it can't be converted to dayTime part without big precision loss.")
+        }
+        let rhs = rhs.into();
+        Some(self.day_time.checked_div(rhs)?)
+    }
+
     /// Checks if the two values are [identical](https://www.w3.org/TR/xmlschema11-2/#identity).
     #[inline]
     pub fn is_identical_with(&self, other: &Self) -> bool {
@@ -464,6 +473,14 @@ impl DayTimeDuration {
         let rhs = rhs.into();
         Some(Self {
             seconds: self.seconds.checked_sub(rhs.seconds)?,
+        })
+    }
+
+    #[inline]
+    pub fn checked_div(&self, rhs: impl Into<Decimal>) -> Option<Self> {
+        let rhs = rhs.into();
+        Some(Self {
+            seconds: self.seconds.checked_div(rhs)?,
         })
     }
 
